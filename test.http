@@ -1,0 +1,17 @@
+### Stream Request
+POST http://localhost:8000/stream
+Content-Type: application/json
+Authorization: Bearer no-key
+
+{
+    "messages": ["How does leaf curl virus transmit"]
+}
+
+### RAG Request
+POST http://localhost:8000/rag
+Content-Type: application/json
+Authorization: Bearer no-key
+
+{
+    "messages": ["How does leaf curl virus transmit"]
+}
