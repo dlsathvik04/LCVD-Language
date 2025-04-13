@@ -1,2 +1,9 @@
-llama.cpp
-*.gguf
+# Ignore local build and temporary files
+__pycache__/
+*.pyc
+*.pkl
+*.log
+.env
+.vscode
+
+launcher.sh

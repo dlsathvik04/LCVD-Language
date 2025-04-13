@@ -1,5 +1,5 @@
 ### Stream Request
-POST http://localhost:8000/stream
+POST http://localhost:7860/stream
 Content-Type: application/json
 Authorization: Bearer no-key
 
@@ -8,10 +8,12 @@ Authorization: Bearer no-key
 }
 
 ### RAG Request
-POST http://localhost:8000/rag
+POST https://dlsathvik04-lcvd-language.hf.space/rag/direct
 Content-Type: application/json
 Authorization: Bearer no-key
 
 {
-    "messages": ["How does leaf curl virus transmit"]
+    "class_name" : "chilli-leaf_curl_virus",
+    "history": [],
+    "prompt" : "what is this virus? and how can it be cured?"
 }

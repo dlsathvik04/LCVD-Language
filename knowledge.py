@@ -1,59 +1,69 @@
 import os
 import chromadb
-import requests
+from google import genai
 
-# Initialize ChromaDB persistent client
-client = chromadb.PersistentClient(path="./knowledge_base")
-collection = client.get_or_create_collection("text_chunks")
+from vector_db import GoogleEmbeddingFunction
 
-# Llama.cpp server URL for embeddings
-LLAMA_API_URL = "http://localhost:8080/embeddings"
+# Get API key from environment variable
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise RuntimeError("GOOGLE_API_KEY environment variable not set.")
 
-# Folder containing .txt files
-FOLDER_PATH = "./text_files"
-
-# Text preprocessing and chunking function
-def preprocess_text(text):
-    chunks = []
-    paragraphs = text.split("\n\n")  # Split text by paragraphs
-    for paragraph in paragraphs:
-        sentences = paragraph.split(". ")  # Further split by sentences
-        chunk = ""
-        for sentence in sentences:
-            if len(chunk) + len(sentence) > 500:  # Assuming max 500 characters per chunk for embeddings
-                chunks.append(chunk.strip())
-                chunk = sentence
-            else:
-                chunk += sentence + ". "
-        if chunk:
-            chunks.append(chunk.strip())
-    return chunks
-
-def get_embeddings(text):
-    """Generate embeddings using llama.cpp API."""
-    response = requests.post(LLAMA_API_URL, json={"model" : "llama3.2", "input": text})
-    response.raise_for_status()
-    response_json = response.json()
-    return response_json['data'][0]['embedding']
-
-# Iterate through .txt files and add chunks to ChromaDB
-for filename in os.listdir(FOLDER_PATH):
-    if filename.endswith(".txt"):
-        with open(os.path.join(FOLDER_PATH, filename), "r", encoding="utf-8") as file:
-            text = file.read()
-            text_chunks = preprocess_text(text)
-
-            # Embed each chunk and add to collection with unique ids
-            for i, chunk in enumerate(text_chunks):
-                embedding = get_embeddings(chunk)
-                
-                unique_id = f"{filename}_{i}"  # Unique ID based on filename and chunk index
-                collection.add(
-                    ids=[unique_id],  # Unique ID for the chunk
-                    documents=[chunk],
-                    embeddings=[embedding],
-                    metadatas=[{"filename": filename, "chunk_index": i}]
-                )
+# Create client
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 
-print("Database created and populated successfully!")
+def build_knowledge_base():
+    db_path = "./knowledge_base"
+
+    # Ensure the folder exists and set full permissions
+    os.makedirs(db_path, exist_ok=True)
+    os.chmod(db_path, 0o777)  # Read, write, execute for all users
+
+    db = chromadb.PersistentClient(path=db_path)
+    collection = db.create_collection(
+        name="knowledge",
+        embedding_function=GoogleEmbeddingFunction(client),
+        metadata={
+            "hnsw:num_threads": 2,
+        },
+    )
+    text_dir = "./text_files"
+
+    for filename in os.listdir(text_dir):
+        if filename.endswith(".txt"):
+            class_name = os.path.splitext(filename)[0][3:]
+            print(class_name)
+            with open(
+                os.path.join(text_dir, filename),
+                "r",
+                encoding="utf-8",
+            ) as f:
+                content = f.read()
+            
+            if content.strip() == "":
+                continue
+
+            # Basic chunking, can be improved later
+            chunks = [content[i: i + 500] for i in range(0, len(content), 500)]
+            ids = [f"{class_name}_{i}" for i in range(len(chunks))]
+            print(f"Adding: {class_name}")
+            collection.add(
+                documents=chunks,
+                ids=ids,
+                metadatas=[{"class": class_name}] * len(chunks),
+            )
+
+    # Recursively set full permissions to the whole DB
+    for root, dirs, files in os.walk(db_path):
+        for d in dirs:
+            os.chmod(os.path.join(root, d), 0o777)
+        for f in files:
+            # Read/write for all (no exec for files)
+            os.chmod(os.path.join(root, f), 0o666)
+
+    print("✅ Knowledge base built.")
+
+
+if __name__ == "__main__":
+    build_knowledge_base()
